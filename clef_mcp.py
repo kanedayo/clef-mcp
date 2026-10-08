@@ -14,11 +14,12 @@ Environment variables:
   CLEF_TIMEOUT    Per-request timeout in seconds (default 180).
 """
 
+import base64
 import json
 import os
 import urllib.error
 import urllib.request
-from typing import Any, Union
+from typing import Any, Optional, Union
 
 from mcp.server.fastmcp import FastMCP
 
@@ -62,8 +63,29 @@ def _post_systemone(payload: dict) -> str:
         )
 
 
+def _images_to_base64(paths: list[str]) -> Union[str, list[str]]:
+    """Read local image files and return raw base64 strings (Ollama's
+    /v1/systemone expects bare base64, not data URLs)."""
+    if len(paths) > 4:
+        return "error: at most 4 images per request"
+    out = []
+    for p in paths:
+        if not os.path.isfile(p):
+            return f"error: image not found: {p}"
+        try:
+            with open(p, "rb") as f:
+                out.append(base64.b64encode(f.read()).decode("ascii"))
+        except OSError as e:
+            return f"error: cannot read image {p}: {e}"
+    return out
+
+
 @mcp.tool()
-def decide(state: Union[str, dict[str, Any], list[Any]], questions: dict) -> str:
+def decide(
+    state: Union[str, dict[str, Any], list[Any]],
+    questions: dict,
+    images: Optional[list[str]] = None,
+) -> str:
     """Ask the local Clef decision model for fast typed decisions.
 
     Use for classification, yes/no judgments, and ratings — NOT for writing
@@ -83,12 +105,20 @@ def decide(state: Union[str, dict[str, Any], list[Any]], questions: dict) -> str
             - "criteria": for choice, object {option: description} (2-255
               options); for score, array of levels from low to high (2-10);
               for noul, optionally {"true": "...", "false": "..."}.
+        images: Optional list of up to 4 local image file paths (PNG/JPG).
+            The model is multimodal — question instructions may refer to the
+            image(s), e.g. "What is the dominant color of the image?".
 
     Returns:
         JSON string with one entry per question id — the decision,
         per-option probabilities, and confidence — plus token usage.
     """
-    payload = {"model": MODEL, "state": state, "questions": questions}
+    payload: dict[str, Any] = {"model": MODEL, "state": state, "questions": questions}
+    if images:
+        encoded = _images_to_base64(images)
+        if isinstance(encoded, str):  # error message
+            return encoded
+        payload["images"] = encoded
     return _post_systemone(payload)
 
 

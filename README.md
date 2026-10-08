@@ -12,7 +12,7 @@ Claude Code ──(MCP stdio)──> clef-mcp ──(HTTP)──> Ollama /v1/sys
 
 | ツール | 説明 |
 |---|---|
-| `decide(state, questions)` | System One 形式で判断を依頼。`state` は文字列 / JSONオブジェクト / 配列。`questions` は id → `{type, instructions, criteria}`(最大64問) |
+| `decide(state, questions, images?)` | System One 形式で判断を依頼。`state` は文字列 / JSONオブジェクト / 配列。`questions` は id → `{type, instructions, criteria}`(最大64問)。`images` は**ローカル画像ファイルパスの配列(最大4枚)** — clef はマルチモーダルなので、質問で画像を参照できます(例:「画像の左半分は何色ですか?」) |
 | `health()` | Ollama への到達性・バージョン・現在のコネクション設定を JSON で返す |
 
 ## 必要条件
@@ -80,6 +80,25 @@ Claude Code が差分を `state` に整形して `mcp__clef__decide` を呼び�
 ```
 
 **役割分担の原則**: 生成と推論は Claude に残し、**「高頻度・二択〜数択・高速でいい」判断**(分類・トリアージ・マージリスク・意図検出・出力チェック)だけ clef に分流させます。
+
+### 画像のスコアリング
+
+clef はマルチモーダルです。`decide` の `images` にローカル画像パスを渡すと、Ollama の `/v1/systemone` が受け付ける**生の base64** として送られます(data URL は非対応)。質問の `instructions` で画像を参照します:
+
+```json
+{
+  "state": "score this image",
+  "questions": {
+    "dominant_color": {
+      "type": "choice",
+      "instructions": "Which color occupies the LEFT half of the image?",
+      "criteria": { "red": "red", "blue": "blue", "green": "green" }
+    },
+    "left_is_red": { "type": "noul", "instructions": "Is the left half red?" }
+  },
+  "images": ["/path/to/image.png"]
+}
+```
 
 ## トラブルシュート
 
