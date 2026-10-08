@@ -1,0 +1,3 @@
+# FastMCP lives in the v1 line of the MCP Python SDK.
+# mcp 2.x renamed FastMCP to MCPServer, so pin to v1 for this server.
+mcp>=1.0,<2.0
